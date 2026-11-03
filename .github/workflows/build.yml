@@ -1,8 +1,8 @@
-name: Build Android APK
+name: Gerar APK Android
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -10,29 +10,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Baixar código do repositório
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
-      - name: Setup Java
+      - name: Configurar Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Instalar Capacitor e Gerar Projeto
+      - name: Preparar arquivos e Capacitor
         run: |
+          # Garante que a pasta www exista
+          mkdir -p www
+          # Se o index.html estiver na raiz, copia para www automaticamente
+          if [ -f "index.html" ]; then
+            cp -r index.html www/
+          fi
+
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init "Block Ultra" "com.jogo.blockultra" --web-dir "."
+          npx cap init "Block Ultra" "com.jogo.blockultra" --web-dir "www"
           npx cap add android
-          npx cap copy
+          npx cap sync android
 
-      - name: Compilar APK via Gradle
+      - name: Compilar APK
         run: |
           cd android
           chmod +x gradlew
@@ -41,5 +48,5 @@ jobs:
       - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
         with:
-          name: BlockUltra-Debug-APK
+          name: BlockUltra-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
