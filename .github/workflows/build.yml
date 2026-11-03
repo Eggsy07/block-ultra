@@ -26,9 +26,7 @@ jobs:
 
       - name: Preparar arquivos e Capacitor
         run: |
-          # Garante que a pasta www exista
           mkdir -p www
-          # Se o index.html estiver na raiz, copia para www automaticamente
           if [ -f "index.html" ]; then
             cp -r index.html www/
           fi
@@ -38,6 +36,9 @@ jobs:
           npx cap init "Block Ultra" "com.jogo.blockultra" --web-dir "www"
           npx cap add android
           npx cap sync android
+
+          # Remove conflito de classes duplicadas do Kotlin
+          echo "configurations.all { exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'; exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8' }" >> android/app/build.gradle
 
       - name: Compilar APK
         run: |
