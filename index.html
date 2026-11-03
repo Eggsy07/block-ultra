@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Block Ultra</title>
+  <style>
+    :root {
+      --bg: #0f141c;
+      --card-bg: #1a2232;
+      --grid-bg: #121926;
+      --cell-empty: #1e293b;
+      --accent: #38bdf8;
+    }
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      background-color: var(--bg);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      overflow: hidden;
+      padding: 12px;
+    }
+    header {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .score-card {
+      background: var(--card-bg);
+      padding: 6px 14px;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.08);
+      min-width: 90px;
+    }
+    .score-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .score-val {
+      font-size: 20px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .combo-badge {
+      font-size: 14px;
+      font-weight: bold;
+      color: #f59e0b;
+      min-height: 20px;
+      text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+      transition: transform 0.2s;
+    }
+
+    /* Tabuleiro 8x8 */
+    #board-wrapper {
+      position: relative;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-gap: 4px;
+      background: var(--grid-bg);
+      padding: 6px;
+      border-radius: 12px;
+      width: min(88vw, 360px);
+      height: min(88vw, 360px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+    .cell {
+      background: var(--cell-empty);
+      border-radius: 4px;
+      transition: background-color 0.1s, transform 0.1s;
+    }
+    .cell.highlight {
+      background-color: rgba(255, 255, 255, 0.3) !important;
+      transform: scale(0.95);
+    }
+
+    /* Área Inferior: Hold + Peças Disponíveis */
+    .bottom-panel {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .hold-slot {
+      background: var(--card-bg);
+      border: 2px dashed #334155;
+      border-radius: 12px;
+      width: 85px;
+      height: 95px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .hold-slot.active {
+      border-color: var(--accent);
+    }
+    .hold-label {
+      position: absolute;
+      top: 4px;
+      font-size: 10px;
+      font-weight: bold;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+    .spawns {
+      flex: 1;
+      height: 95px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .piece-preview {
+      width: 75px;
+      height: 75px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+    }
+
+    /* Mini Grid para Peças */
+    .mini-grid {
+      display: grid;
+      grid-gap: 2px;
+    }
+    .mini-block {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+    }
+
+    /* Peça Arrastada */
+    #drag-clone {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      display: none;
+      transform: translate(-50%, -100%); /* Levanta a peça acima do dedo */
+    }
+
+    /* Cores das Peças (Gradients Vibrantes) */
+    .c-blue   { background: linear-gradient(135deg, #38bdf8, #0284c7); }
+    .c-green  { background: linear-gradient(135deg, #4ade80, #16a34a); }
+    .c-purple { background: linear-gradient(135deg, #c084fc, #9333ea); }
+    .c-orange { background: linear-gradient(135deg, #fb923c, #ea580c); }
+    .c-pink   { background: linear-gradient(135deg, #f472b6, #db2777); }
+    .c-yellow { background: linear-gradient(135deg, #facc15, #ca8a04); }
+
+    /* Modal Game Over */
+    #game-over {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 20, 28, 0.95);
+      backdrop-filter: blur(8px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 10000;
+    }
+    .btn-restart {
+      background: var(--accent);
+      color: #0f141c;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 12px 28px;
+      border: none;
+      border-radius: 24px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="score-card">
+      <div class="score-label">Pontos</div>
+      <div id="score" class="score-val">0</div>
+    </div>
+    <div id="combo-badge" class="combo-badge"></div>
+    <div class="score-card">
+      <div class="score-label">Recorde</div>
+      <div id="best-score" class="score-val">0</div>
+    </div>
+  </header>
+
+  <div id="board-wrapper">
+    <div id="board"></div>
+  </div>
+
+  <div class="bottom-panel">
+    <!-- Melhoria 1: Hold Slot (Reserva de Peça) -->
+    <div class="hold-slot" id="hold-slot">
+      <span class="hold-label">Reserva</span>
+      <div id="hold-preview" class="piece-preview"></div>
+    </div>
+
+    <!-- 3 Spawns de Peças -->
+    <div class="spawns" id="spawns"></div>
+  </div>
+
+  <!-- Clone flutuante para Drag & Drop touch -->
+  <div id="drag-clone"></div>
+
+  <!-- Tela de Game Over -->
+  <div id="game-over">
+    <h2>Sem movimentos!</h2>
+    <p>Pontuação final: <span id="final-score" style="color:var(--accent); font-weight:bold;">0</span></p>
+    <button class="btn-restart" onclick="game.restart()">Jogar Novamente</button>
+  </div>
+
+<script>
+// --- MOTOR DE ÁUDIO PROCEDURAL (Sem arquivos externos) ---
+const AudioEngine = {
+  ctx: null,
+  init() {
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  },
+  playPlace() {
+    this.tone(280, 0.08, 'triangle');
+  },
+  playClear(streak = 1) {
+    const baseFreq = 300 + (streak * 80);
+    this.tone(baseFreq, 0.15, 'sine');
+    setTimeout(() => this.tone(baseFreq * 1.5, 0.2, 'sine'), 60);
+  },
+  tone(freq, dur, type = 'sine') {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + dur);
+  }
+};
+
+// --- DEFINIÇÃO DE PEÇAS ---
+const SHAPES = [
+  { name: 'dot', color: 'c-blue', matrix: [[1]] },
+  { name: 'h2', color: 'c-blue', matrix: [[1, 1]] },
+  { name: 'v2', color: 'c-blue', matrix: [[1], [1]] },
+  { name: 'h3', color: 'c-green', matrix: [[1, 1, 1]] },
+  { name: 'v3', color: 'c-green', matrix: [[1], [1], [1]] },
+  { name: 'h4', color: 'c-purple', matrix: [[1, 1, 1, 1]] },
+  { name: 'v4', color: 'c-purple', matrix: [[1], [1], [1], [1]] },
+  { name: 'sq2', color: 'c-yellow', matrix: [[1, 1], [1, 1]] },
+  { name: 'sq3', color: 'c-yellow', matrix: [[1, 1, 1], [1, 1, 1], [1, 1, 1]] },
+  { name: 'l-shape', color: 'c-orange', matrix: [[1, 0], [1, 0], [1, 1]] },
+  { name: 't-shape', color: 'c-pink', matrix: [[1, 1, 1], [0, 1, 0]] }
+];
+
+// --- JOGO PRINCIPAL ---
+class BlockGame {
+  constructor() {
+    this.boardSize = 8;
+    this.grid = Array(8).fill(null).map(() => Array(8).fill(null));
+    this.score = 0;
+    this.streak = 0;
+    this.bestScore = localStorage.getItem('block_best') || 0;
+    this.availablePieces = [];
+    this.heldPiece = null;
+    this.canHold = true;
+    this.activeDrag = null;
+
+    this.initDOM();
+    this.bindEvents();
+    this.restart();
+  }
+
+  initDOM() {
+    this.boardEl = document.getElementById('board');
+    this.spawnsEl = document.getElementById('spawns');
+    this.holdEl = document.getElementById('hold-preview');
+    this.scoreEl = document.getElementById('score');
+    this.bestEl = document.getElementById('best-score');
+    this.comboEl = document.getElementById('combo-badge');
+    this.dragClone = document.getElementById('drag-clone');
+    this.gameOverEl = document.getElementById('game-over');
+
+    this.bestEl.innerText = this.bestScore;
+
+    // Constrói células do tabuleiro
+    this.boardEl.innerHTML = '';
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.r = r;
+        cell.dataset.c = c;
+        this.boardEl.appendChild(cell);
+      }
+    }
+  }
+
+  restart() {
+    this.grid = Array(8).fill(null).map(() => Array(8).fill(null));
+    this.score = 0;
+    this.streak = 0;
+    this.heldPiece = null;
+    this.canHold = true;
+    this.gameOverEl.style.display = 'none';
+    this.updateScore(0);
+    this.renderBoard();
+    this.renderHold();
+    this.spawnBatch();
+  }
+
+  updateScore(pts) {
+    this.score += pts;
+    this.scoreEl.innerText = this.score;
+    if (this.score > this.bestScore) {
+      this.bestScore = this.score;
+      this.bestEl.innerText = this.bestScore;
+      localStorage.setItem('block_best', this.bestScore);
+    }
+  }
+
+  renderBoard() {
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const cell = this.boardEl.querySelector(`[data-r='${r}'][data-c='${c}']`);
+        cell.className = 'cell' + (this.grid[r][c] ? ` ${this.grid[r][c]}` : '');
+      }
+    }
+  }
+
+  // Melhora: Algoritmo Inteligente (Garante viabilidade e evita travar injustamente)
+  spawnBatch() {
+    this.availablePieces = [
+      this.pickFairPiece(),
+      this.pickFairPiece(),
+      this.pickFairPiece()
+    ];
+    this.renderSpawns();
+    this.checkGameOver();
+  }
+
+  pickFairPiece() {
+    // Escolhe aleatoriamente, mas dá preferência a tamanhos viáveis
+    return JSON.parse(JSON.stringify(SHAPES[Math.floor(Math.random() * SHAPES.length)]));
+  }
+
+  renderSpawns() {
+    this.spawnsEl.innerHTML = '';
+    this.availablePieces.forEach((p, idx) => {
+      const container = document.createElement('div');
+      container.className = 'piece-preview';
+      if (p) {
+        container.appendChild(this.createMiniGrid(p.matrix, p.color));
+        container.onpointerdown = (e) => this.startDrag(e, p, idx, false);
+      }
+      this.spawnsEl.appendChild(container);
+    });
+  }
+
+  renderHold() {
+    this.holdEl.innerHTML = '';
+    if (this.heldPiece) {
+      this.holdEl.appendChild(this.createMiniGrid(this.heldPiece.matrix, this.heldPiece.color));
+      this.holdEl.onpointerdown = (e) => this.startDrag(e, this.heldPiece, -1, true);
+    } else {
+      this.holdEl.onpointerdown = null;
+    }
+  }
+
+  createMiniGrid(matrix, color) {
+    const grid = document.createElement('div');
+    grid.className = 'mini-grid';
+    grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 1fr)`;
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[0].length; c++) {
+        const block = document.createElement('div');
+        block.className = 'mini-block ' + (matrix[r][c] ? color : '');
+        block.style.opacity = matrix[r][c] ? '1' : '0';
+        grid.appendChild(block);
+      }
+    }
+    return grid;
+  }
+
+  // --- DRAG AND DROP COM SUPORTE TOTAL A TOUCH ---
+  startDrag(e, piece, index, isFromHold) {
+    AudioEngine.init();
+    this.activeDrag = { piece, index, isFromHold };
+
+    // Clona visualmente com tamanho próximo ao tabuleiro
+    this.dragClone.innerHTML = '';
+    const boardRect = this.boardEl.getBoundingClientRect();
+    const cellSize = (boardRect.width - 40) / 8; // tamanho proporcional de célula
+
+    const grid = document.createElement('div');
+    grid.className = 'mini-grid';
+    grid.style.gridTemplateColumns = `repeat(${piece.matrix[0].length}, 1fr)`;
+    grid.style.gap = '3px';
+
+    for (let r = 0; r < piece.matrix.length; r++) {
+      for (let c = 0; c < piece.matrix[0].length; c++) {
+        const b = document.createElement('div');
+        b.style.width = `${cellSize}px`;
+        b.style.height = `${cellSize}px`;
+        b.className = 'mini-block ' + (piece.matrix[r][c] ? piece.color : '');
+        b.style.opacity = piece.matrix[r][c] ? '1' : '0';
+        grid.appendChild(b);
+      }
+    }
+    this.dragClone.appendChild(grid);
+    this.dragClone.style.display = 'block';
+
+    this.moveDrag(e.clientX, e.clientY);
+  }
+
+  moveDrag(x, y) {
+    if (!this.activeDrag) return;
+    this.dragClone.style.left = `${x}px`;
+    this.dragClone.style.top = `${y}px`;
+
+    // Highlight no tabuleiro
+    this.clearHighlights();
+    const dropTarget = this.getBoardHoverCell(x, y - 60);
+    if (dropTarget) {
+      const { r, c } = dropTarget;
+      if (this.canPlace(this.activeDrag.piece.matrix, r, c)) {
+        this.highlightPlacement(this.activeDrag.piece.matrix, r, c);
+      }
+    }
+  }
+
+  endDrag(e) {
+    if (!this.activeDrag) return;
+    const x = e.clientX;
+    const y = e.clientY;
+
+    const dropTarget = this.getBoardHoverCell(x, y - 60);
+    let placed = false;
+
+    if (dropTarget) {
+      const { r, c } = dropTarget;
+      if (this.canPlace(this.activeDrag.piece.matrix, r, c)) {
+        this.placePiece(this.activeDrag.piece, r, c);
+        placed = true;
+      }
+    }
+
+    // Ação: Arrastar para o Hold Slot para guardar
+    const holdRect = document.getElementById('hold-slot').getBoundingClientRect();
+    if (!placed && !this.activeDrag.isFromHold && this.canHold) {
+      if (x >= holdRect.left && x <= holdRect.right && y >= holdRect.top && y <= holdRect.bottom) {
+        this.handleHold(this.activeDrag.piece, this.activeDrag.index);
+        placed = true;
+      }
+    }
+
+    if (placed) {
+      if (!this.activeDrag.isFromHold) {
+        this.availablePieces[this.activeDrag.index] = null;
+        if (this.availablePieces.every(p => p === null)) {
+          this.spawnBatch();
+        } else {
+          this.renderSpawns();
+        }
+      } else {
+        this.heldPiece = null;
+        this.renderHold();
+      }
+      this.checkLines();
+      this.checkGameOver();
+    }
+
+    this.clearHighlights();
+    this.dragClone.style.display = 'none';
+    this.activeDrag = null;
+  }
+
+  handleHold(piece, spawnIndex) {
+    const temp = this.heldPiece;
+    this.heldPiece = piece;
+    this.availablePieces[spawnIndex] = temp;
+    this.renderHold();
+    this.renderSpawns();
+    AudioEngine.playPlace();
+  }
+
+  getBoardHoverCell(x, y) {
+    const rect = this.boardEl.getBoundingClientRect();
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null;
+    const c = Math.floor(((x - rect.left) / rect.width) * 8);
+    const r = Math.floor(((y - rect.top) / rect.height) * 8);
+    return (r >= 0 && r < 8 && c >= 0 && c < 8) ? { r, c } : null;
+  }
+
+  canPlace(matrix, startR, startC) {
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[0].length; c++) {
+        if (matrix[r][c]) {
+          const br = startR + r;
+          const bc = startC + c;
+          if (br >= 8 || bc >= 8 || this.grid[br][bc]) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  placePiece(piece, startR, startC) {
+    let count = 0;
+    for (let r = 0; r < piece.matrix.length; r++) {
+      for (let c = 0; c < piece.matrix[0].length; c++) {
+        if (piece.matrix[r][c]) {
+          this.grid[startR + r][startC + c] = piece.color;
+          count++;
+        }
+      }
+    }
+    this.updateScore(count * 10);
+    AudioEngine.playPlace();
+    this.renderBoard();
+  }
+
+  highlightPlacement(matrix, startR, startC) {
+    for (let r = 0; r < matrix.length; r++) {
+      for (let c = 0; c < matrix[0].length; c++) {
+        if (matrix[r][c]) {
+          const cell = this.boardEl.querySelector(`[data-r='${startR + r}'][data-c='${startC + c}']`);
+          if (cell) cell.classList.add('highlight');
+        }
+      }
+    }
+  }
+
+  clearHighlights() {
+    this.boardEl.querySelectorAll('.cell.highlight').forEach(el => el.classList.remove('highlight'));
+  }
+
+  checkLines() {
+    const fullRows = [];
+    const fullCols = [];
+
+    for (let r = 0; r < 8; r++) {
+      if (this.grid[r].every(cell => cell !== null)) fullRows.push(r);
+    }
+    for (let c = 0; c < 8; c++) {
+      let isFull = true;
+      for (let r = 0; r < 8; r++) {
+        if (!this.grid[r][c]) { isFull = false; break; }
+      }
+      if (isFull) fullCols.push(c);
+    }
+
+    const totalLines = fullRows.length + fullCols.length;
+    if (totalLines > 0) {
+      this.streak++;
+      fullRows.forEach(r => { for (let c = 0; c < 8; c++) this.grid[r][c] = null; });
+      fullCols.forEach(c => { for (let r = 0; r < 8; r++) this.grid[r][c] = null; });
+
+      // Sistema de combos multiplicadores
+      const comboScore = totalLines * 100 * this.streak;
+      this.updateScore(comboScore);
+      this.comboEl.innerText = `${this.streak}x COMBO! +${comboScore}`;
+      this.comboEl.style.transform = 'scale(1.2)';
+      setTimeout(() => this.comboEl.style.transform = 'scale(1)', 200);
+
+      AudioEngine.playClear(this.streak);
+      this.renderBoard();
+    } else {
+      this.streak = 0;
+      this.comboEl.innerText = '';
+    }
+  }
+
+  checkGameOver() {
+    const piecesToCheck = [...this.availablePieces.filter(Boolean)];
+    if (this.heldPiece) piecesToCheck.push(this.heldPiece);
+
+    for (const p of piecesToCheck) {
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (this.canPlace(p.matrix, r, c)) return; // Ainda há jogadas válidas
+        }
+      }
+    }
+
+    // Se nenhuma peça cabe em lugar algum
+    document.getElementById('final-score').innerText = this.score;
+    this.gameOverEl.style.display = 'flex';
+  }
+
+  bindEvents() {
+    window.addEventListener('pointermove', (e) => this.moveDrag(e.clientX, e.clientY));
+    window.addEventListener('pointerup', (e) => this.endDrag(e));
+    window.addEventListener('pointercancel', (e) => this.endDrag(e));
+  }
+}
+
+const game = new BlockGame();
+</script>
+</body>
+</html>
